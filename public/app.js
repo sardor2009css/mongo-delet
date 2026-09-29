@@ -67,9 +67,11 @@ function qatorYasash(mahsulot) {
     </div>
 
     <div class="mt-4 flex items-center gap-2 border-t border-white/10 pt-3">
+      <!-- +1 tugmasi: data-ortirish ga mahsulot _id si yoziladi, bosilganda qtyniOshirish() chaqiriladi -->
       <button data-ortirish="${mahsulot._id}"
         class="active:scale-95 flex-1 rounded-lg bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/25">+1</button>
 
+      <!-- O'chirish tugmasi: data-ochirish ga _id yoziladi, bosilganda mahsulotniOchirish() chaqiriladi -->
       <button data-ochirish="${mahsulot._id}"
         class="active:scale-95 flex-1 rounded-lg bg-rose-500/15 px-3 py-2 text-sm font-bold text-rose-300 transition hover:bg-rose-500/25">O'chirish</button>
     </div>
@@ -104,38 +106,53 @@ async function mahsulotQoShish(qator) {
   xabar('Mahsulot qo\'shildi');
 }
 
+// ---------- O'CHIRISH tugmasi ----------
+// data-ochirish atributidagi _id shu funksiyaga uzatiladi.
 async function mahsulotniOchirish(id) {
+  // 1) Ihtiyoriy: tasdiqlash oynasi. Bekor qilinsa funksiya to'xtaydi.
   if (!confirm('Bu mahsulotni o\'chirishni tasdiqlaysizmi?')) return;
 
+  // 2) Serverga DELETE so'rovi yuboramiz (server.js dagi DELETE marshruti ishlaydi)
   const javob = await fetch('/mahsulotlar/' + id, { method: 'DELETE' });
 
+  // 3) Server 404/400 qaytarsa, undagi xato matnini ko'rsatamiz
   if (!javob.ok) return xabar((await javob.json()).xato, true);
 
+  // 4) Server o'chirilgan mahsulotni qaytaradi — biz uni ro'yxatdan olib tashlaymiz
   const ochirilgan = await javob.json();
   mahsulotlar = mahsulotlar.filter((m) => m._id !== ochirilgan._id);
   royxatniChiz();
   xabar('Mahsulot o\'chirildi');
 }
 
+// ---------- "+1" tugmasi ----------
+// Eski qty ga 1 qo'shib, PATCH orqali yuboramiz.
 async function qtyniOshirish(id) {
+  // 1) Ro'yxatdagi mahsulotni topamiz (uning joriy qty si kerak)
   const mahsulot = mahsulotlar.find((m) => m._id === id);
   if (!mahsulot) return;
 
+  // 2) PATCH: faqat "qty" maydonini yangilayamiz, qolganlari o'zgarmaydi
   const javob = await fetch('/mahsulotlar/' + id, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ qty: mahsulot.qty + 1 }),
   });
 
+  // 3) Xato bo'lsa (masalan id noto'g'ri) ko'rsatamiz
   if (!javob.ok) return xabar((await javob.json()).xato, true);
 
+  // 4) Server YANGILANGAN mahsulotni qaytaradi — ro'yxatdagi eskisini shu bilan almashtiramiz
   const yangilangan = await javob.json();
   mahsulotlar = mahsulotlar.map((m) => (m._id === yangilangan._id ? yangilangan : m));
   royxatniChiz();
   xabar('Soni bittaga oshdi');
 }
 
+// ---------- Tugmalar bitta kichik ro'yxatga ulanadi (Event Delegation) ----------
+// Har bir tugma alohida listener emas, umumiy bitta listener ishlaydi.
 royxat.addEventListener('click', (e) => {
+  // e.target — bosilgan element. closest() esa uning ichidagi tugmani topadi.
   const ochirish = e.target.closest('[data-ochirish]');
   if (ochirish) return mahsulotniOchirish(ochirish.dataset.ochirish);
 

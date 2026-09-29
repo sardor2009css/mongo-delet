@@ -1,90 +1,40 @@
-require('dotenv').config();
+import 'dotenv/config';
+import express from 'express';
+import mongoose from 'mongoose';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const express = require('express');
-const mongoose = require('mongoose');
-const path = require('path');
-const Mahsulot = require('./models/Mahsulot');
+import mahsulotRouter from './routes/mahsulot.js';
+import xato from './middleware/xato.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 1. Standart middleware'lar
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-function sendError(res, xato) {
-  if (xato instanceof mongoose.Error.CastError) {
-    return res.status(400).json({ xato: 'Noto\'g\'ri _id formati', malumot: xato.value });
-  }
+// 2. Yo'nalishlar (Routes)
+app.use('/mahsulotlar', mahsulotRouter);
 
-  if (xato instanceof mongoose.Error.ValidationError) {
-    return res.status(400).json({
-      xato: 'Ma\'lumot noto\'g\'ri',
-      xatolar: Object.values(xato.errors).map((e) => e.message),
+// 3. Xatoliklarni tutuvchi middleware (eng oxirida ulanishi shart!)
+app.use(xato);
+
+// 4. Ma'lumotlar bazasiga ulanish va serverni ishga tushirish
+if (process.env.NODE_ENV !== 'test' && process.env.MONGO_URI) {
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Server http://localhost:${PORT} da ishlayapti`);
+      });
+    })
+    .catch((err) => {
+      console.error("MongoDB ga ulanib bo'lmadi:", err.message);
     });
-  }
-
-  console.error(xato);
-  return res.status(500).json({ xato: 'Serverda xato yuz berdi' });
 }
 
-app.get('/mahsulotlar', async (req, res) => {
-  try {
-    res.status(200).json(await Mahsulot.find().sort({ createdAt: -1 }));
-  } catch (xato) {
-    sendError(res, xato);
-  }
-});
-
-app.get('/mahsulotlar/:id', async (req, res) => {
-  try {
-    const mahsulot = await Mahsulot.findById(req.params.id);
-    if (!mahsulot) return res.status(404).json({ xato: 'Mahsulot topilmadi' });
-    res.status(200).json(mahsulot);
-  } catch (xato) {
-    sendError(res, xato);
-  }
-});
-
-app.post('/mahsulotlar', async (req, res) => {
-  try {
-    res.status(201).json(await Mahsulot.create(req.body));
-  } catch (xato) {
-    sendError(res, xato);
-  }
-});
-
-app.delete('/mahsulotlar/:id', async (req, res) => {
-  try {
-    const mahsulot = await Mahsulot.findByIdAndDelete(req.params.id);
-    if (!mahsulot) return res.status(404).json({ xato: 'Mahsulot topilmadi' });
-    res.status(200).json(mahsulot);
-  } catch (xato) {
-    sendError(res, xato);
-  }
-});
-
-app.patch('/mahsulotlar/:id', async (req, res) => {
-  try {
-    const { name, category, price, qty } = req.body;
-    const yangilanish = {};
-    if (name !== undefined) yangilanish.name = name;
-    if (category !== undefined) yangilanish.category = category;
-    if (price !== undefined) yangilanish.price = price;
-    if (qty !== undefined) yangilanish.qty = qty;
-
-    const mahsulot = await Mahsulot.findByIdAndUpdate(req.params.id, yangilanish, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!mahsulot) return res.status(404).json({ xato: 'Mahsulot topilmadi' });
-    res.status(200).json(mahsulot);
-  } catch (xato) {
-    sendError(res, xato);
-  }
-});
-
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => app.listen(PORT, () => console.log(`Server http://localhost:${PORT} da ishlayapti`)))
-  .catch((xato) => console.error('MongoDB ga ulanib bo\'lmadi:', xato.message));
+export default app;
